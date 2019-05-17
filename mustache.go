@@ -11,6 +11,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"encoding/json"
 )
 
 var (
@@ -26,11 +27,11 @@ type TagType uint
 
 // Defines representing the possible Tag types
 const (
-	Invalid TagType = iota
-	Variable
-	Section
-	InvertedSection
-	Partial
+	Invalid         TagType = iota
+	Variable        
+	Section         
+	InvertedSection 
+	Partial         
 )
 
 // Skip all whitespaces apeared after these types of tags until end of line
@@ -236,13 +237,13 @@ func (tmpl *Template) readText() (*textReadingResult, error) {
 	if mayStandalone {
 		return &textReadingResult{
 			text:          tmpl.data[pPrev:i],
-			padding:       tmpl.data[i : tmpl.p-len(tmpl.otag)],
+			padding:       tmpl.data[i: tmpl.p-len(tmpl.otag)],
 			mayStandalone: true,
 		}, nil
 	}
 
 	return &textReadingResult{
-		text:          tmpl.data[pPrev : tmpl.p-len(tmpl.otag)],
+		text:          tmpl.data[pPrev: tmpl.p-len(tmpl.otag)],
 		padding:       "",
 		mayStandalone: false,
 	}, nil
@@ -373,7 +374,7 @@ func (tmpl *Template) parseSection(section *sectionElement) error {
 			if tag[len(tag)-1] != '=' {
 				return parseError{tmpl.curline, "Invalid meta tag"}
 			}
-			tag = strings.TrimSpace(tag[1 : len(tag)-1])
+			tag = strings.TrimSpace(tag[1: len(tag)-1])
 			newtags := strings.SplitN(tag, " ", 2)
 			if len(newtags) == 2 {
 				tmpl.otag = newtags[0]
@@ -382,7 +383,7 @@ func (tmpl *Template) parseSection(section *sectionElement) error {
 		case '{':
 			if tag[len(tag)-1] == '}' {
 				//use a raw tag
-				name := strings.TrimSpace(tag[1 : len(tag)-1])
+				name := strings.TrimSpace(tag[1: len(tag)-1])
 				section.elems = append(section.elems, &varElement{name, true})
 			}
 		case '&':
@@ -445,7 +446,7 @@ func (tmpl *Template) parse() error {
 			if tag[len(tag)-1] != '=' {
 				return parseError{tmpl.curline, "Invalid meta tag"}
 			}
-			tag = strings.TrimSpace(tag[1 : len(tag)-1])
+			tag = strings.TrimSpace(tag[1: len(tag)-1])
 			newtags := strings.SplitN(tag, " ", 2)
 			if len(newtags) == 2 {
 				tmpl.otag = newtags[0]
@@ -454,7 +455,7 @@ func (tmpl *Template) parse() error {
 		case '{':
 			//use a raw tag
 			if tag[len(tag)-1] == '}' {
-				name := strings.TrimSpace(tag[1 : len(tag)-1])
+				name := strings.TrimSpace(tag[1: len(tag)-1])
 				tmpl.elems = append(tmpl.elems, &varElement{name, true})
 			}
 		case '&':
@@ -627,7 +628,19 @@ func renderElement(element interface{}, contextChain []interface{}, buf io.Write
 
 		if val.IsValid() {
 			if elem.raw {
-				fmt.Fprint(buf, val.Interface())
+				switch val.Interface().(type) {
+				case string:
+				case int:
+				case bool:
+					fmt.Fprint(buf, val.Interface())
+				default:
+					b, err := json.Marshal(val.Interface())
+					if err == nil {
+						fmt.Fprint(buf, string(b))
+					} else {
+						fmt.Fprint(buf, val.Interface())
+					}
+				}
 			} else {
 				s := fmt.Sprint(val.Interface())
 				template.HTMLEscape(buf, []byte(s))
